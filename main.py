@@ -2,12 +2,32 @@ import requests
 from bs4 import BeautifulSoup
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
 from telegram.ext import Updater, CommandHandler, CallbackContext, CallbackQueryHandler
-import time
 
 
-# URL для парсингу курсу валют
+def get_all_cryptos():
+    url = "https://api.coingecko.com/api/v3/coins/markets"
+    params = {
+        "vs_currency": "usd",  # Specify the desired currency
+        "order": "market_cap_desc",
+        "per_page": 100,  # Adjust the number of results per page as needed
+        "page": 1
+    }
+
+    response = requests.get(url, params=params)
+    data = response.json()
+
+    list_crypts = []
+    for crypto in data:
+        list_crypts.append((crypto['name'], crypto['symbol'], crypto['current_price']))
+
+    return list_crypts
+
+get_cryptos = get_all_cryptos()
+
+
+# URL for parsing cource валют
 def get_crypto_cource():
-    url = f"https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json"
+    url = "https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json"
     response = requests.get(url)
     data = response.json()
 
@@ -19,7 +39,8 @@ def get_crypto_cource():
 
 get_cource = get_crypto_cource()
 
-# URL для парсингу цін криптовалют
+
+# URL for parsing coint crypto
 def get_crypto_price(crypto_id):
     url = f"https://api.coingecko.com/api/v3/simple/price?ids={crypto_id}&vs_currencies=usd"
     response = requests.get(url)
@@ -27,10 +48,6 @@ def get_crypto_price(crypto_id):
     print(data)
     return data[crypto_id]['usd']
 
-
-bitcoin_price = get_crypto_price('bitcoin')
-ethereum_price = get_crypto_price('ethereum')
-litecoin_price = get_crypto_price('litecoin')
 
 def get_exchange_rate(currency):
     url = f'/{currency}'  
@@ -69,34 +86,28 @@ def button_click(update: Update, context: CallbackContext) -> None:
     
 
     if query.data == 'crypto':
-        keyboard = [
-            [InlineKeyboardButton("Bitcoin", callback_data='bitcoin')],
-            [InlineKeyboardButton("Litecoin", callback_data='litecoin')],
-            [InlineKeyboardButton("Etherium", callback_data='etherium')],
-        ]
+        # list keyboards crypto
+        keyboard = []
+
+        # list crypto
+        global lst_crypto
+        lst_crypto = []
+
+        # add keyboards
+        for crypto in get_cryptos:   
+            lst_crypto.append(crypto)
+            keyboard.append([InlineKeyboardButton(crypto[0], callback_data=str(crypto[0]))])
+
         reply_markup = InlineKeyboardMarkup(keyboard)
         query.message.reply_text('Оберіть криптовалюту:', reply_markup=reply_markup)
 
-    elif query.data == 'bitcoin':
-        price = context.bot_data.get('bitcoin_price', f'${bitcoin_price}')
-        query.message.reply_text(f'Ціна Bitcoin: {price}')
-
-    elif query.data == 'litecoin':
-        price = context.bot_data.get('litecoin_price', f'${litecoin_price}')
-        query.message.reply_text(f'Ціна Litecoin: {price}')
-
-
-    elif query.data == 'etherium':
-        price = context.bot_data.get('etherium_price', f'${ethereum_price}')
-        query.message.reply_text(f'Ціна Etherium: {price}')
-
 
     elif query.data == 'exchange': 
-
         keyboard = []
 
         global lst_p
         lst_p = []
+
         for pair in get_cource:   
             lst_p.append(pair)
             keyboard.append([InlineKeyboardButton(pair[0], callback_data=str(pair[0]))])
@@ -105,17 +116,24 @@ def button_click(update: Update, context: CallbackContext) -> None:
         reply_markup = InlineKeyboardMarkup(keyboard)
         query.message.reply_text('Оберіть валюту:', reply_markup=reply_markup)
 
+
     for i in lst_p:
         if query.data == str(i[0]):
             cource = context.bot_data.get(i[1], i[1])
             query.message.reply_text(f'Курс: {cource}')
 
+    #FIXME
+    for i in lst_crypto:
+        if query.data == [str(c[0]) for c in lst_crypto]:
+            price = context.bot_data.get(i[1], i[1])
+            query.message.reply_text(f'Ціна: {price}')
+
 
 def main() -> None:
-    updater = Updater("YOUR_TOKE")  
+    updater = Updater("6096869497:AAFdCF3r3bQMZdI8ZRxnyEAn3-vc_bBsIpc")  
     job_queue = updater.job_queue
 
-    job_queue.run_repeating(update_prices, interval=3600, first=0)
+    job_queue.run_repeating(update_prices, interval=10, first=0)
 
     updater.dispatcher.add_handler(CommandHandler("start", start))
     updater.dispatcher.add_handler(CallbackQueryHandler(button_click))
